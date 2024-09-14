@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"strconv"
 )
 
 func main() {
@@ -32,15 +31,6 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	borrow, bigNumRes := strct.LongSub(bigNum1, bigNum2)
-	fmt.Println("Add in hex:", bigNumRes.ToHex(), borrow)
-	fmt.Println(strct.LongCmp(bigNum2, bigNum1))
-
-	hexNum3 := "784afcfaf40d652bdc697506a7e6bad6e3bee3ed359bba84c9c6a22c042d5c7b5f25dc1af8ae3399aaa5c58d52dc214045ba0af3072cc275d72c8ef36af869bfcf1085e57e33246dc11e64b0711f1ea4c18103ba04becdc27ef2bd39a4327cdc92e75384f02adbce0d2b2136fe4e336f5d98bbb0f2a285f87feec85939d0f12d9cd99ef7fe0cf5fcf1ef8f2fe2f99feb6f455890"
-	hexNum4 := "ffffffff"
-	bigNum3, _ := strct.NewBigNumFromStringHex(hexNum3)
-	//bigNum4, _ := strct.NewBigNumFromStringHex(hexNum3)
-	hexnum, err := strconv.ParseUint(hexNum4, 16, 64)
-	res, carry := strct.LongMulOneDigit(bigNum3, hexnum)
-	fmt.Println(res.ToHex(), carry)
+	res := strct.LongMul(bigNum1, bigNum2)
+	fmt.Println(res.ToHex4096())
 }

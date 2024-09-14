@@ -7,18 +7,24 @@ import (
 )
 
 const (
-	BIG_NUM_LENTH = 2048
-	BLOCK_NUM     = BIG_NUM_LENTH / 32
-	INT_SIZE      = 4294967296
-	SIZE          = 32
+	BIG_NUM2048_LENTH = 2048
+	SIZE              = 32
+	BLOCK_NUM2048     = BIG_NUM2048_LENTH / SIZE
+	INT32_SIZE        = 4294967296
+	BIG_NUM4096_LENTH = 4096
+	BLOCK_NUM4096     = BIG_NUM4096_LENTH / SIZE
 )
 
-type BigInt struct {
-	NumSlice [BLOCK_NUM]uint64 // 64 * 64 / 2 = 2048
+type BigInt2048 struct {
+	NumSlice [BLOCK_NUM2048]uint64 // 64 * 64 / 2 = 2048
 }
 
-func NewBigNumFromStringHex(hexNum string) (*BigInt, error) {
-	bigNum := BigInt{}
+type BigInt4096 struct {
+	NumSlice [BLOCK_NUM4096]uint64 // 64 * 64 / 2 = 2048
+}
+
+func NewBigNumFromStringHex(hexNum string) (*BigInt2048, error) {
+	bigNum := BigInt2048{}
 	stringLen := len(hexNum)
 	if stringLen > 512 {
 		return nil, errors.New("number out of range")
@@ -59,7 +65,7 @@ func formatUintWithLeadingZeros(num uint64, width int) string {
 	return hexStr
 }
 
-func (bi *BigInt) ToHex() string {
+func (bi *BigInt2048) ToHex() string {
 	hexString := ""
 	isCarryBit := true
 	for i := 0; i < 64; i++ {
@@ -80,7 +86,28 @@ func (bi *BigInt) ToHex() string {
 	return hexString
 }
 
-func LongCmp(num1, num2 *BigInt) int64 {
+func (bi *BigInt4096) ToHex4096() string {
+	hexString := ""
+	isCarryBit := true
+	for i := 0; i < 128; i++ {
+		num := bi.NumSlice[i]
+		if isCarryBit == true {
+			if num == 0 {
+				continue
+			} else {
+				isCarryBit = false
+			}
+		}
+		hexString += formatUintWithLeadingZeros(num, 8)
+
+	}
+	if hexString == "" {
+		return "0"
+	}
+	return hexString
+}
+
+func LongCmp(num1, num2 *BigInt2048) int64 {
 	borrow, res := LongSub(num1, num2)
 
 	if borrow == 0 {
@@ -94,23 +121,40 @@ func LongCmp(num1, num2 *BigInt) int64 {
 	}
 }
 
-func LongMulOneDigit(bigNum *BigInt, num uint64) (*BigInt, uint64) {
-	res := BigInt{}
+func LongMulOneDigit(bigNum *BigInt2048, num uint64) *BigInt4096 {
+	res := BigInt4096{}
 	var carry uint64 = 0
+	j := 127
 	for i := 63; i >= 0; i-- {
 		temp := bigNum.NumSlice[i]*num + carry
-		res.NumSlice[i] = temp & (INT_SIZE - 1)
+		res.NumSlice[j] = temp & (INT32_SIZE - 1)
 		carry = temp >> SIZE
+		j--
 	}
-	return &res, carry
+	if carry != 0 {
+		res.NumSlice[128-64] = carry
+	}
+	return &res
 }
 
-func LongAdd(bigInt1, bigInt2 *BigInt) (uint64, BigInt) {
-	resBigNum := BigInt{}
+func LongAdd(bigInt1, bigInt2 *BigInt2048) (uint64, *BigInt2048) {
+	resBigNum := BigInt2048{}
 	var carry uint64 = 0
 	for i := 63; i >= 0; i-- {
 		temp := bigInt1.NumSlice[i] + bigInt2.NumSlice[i] + carry
-		resBigNum.NumSlice[i] = temp&INT_SIZE - 1
+		resBigNum.NumSlice[i] = temp & (INT32_SIZE - 1)
+		carry = temp >> 32
+	}
+
+	return carry, &resBigNum
+}
+
+func LongAdd4096(bigInt1, bigInt2 *BigInt4096) (uint64, BigInt4096) {
+	resBigNum := BigInt4096{}
+	var carry uint64 = 0
+	for i := 127; i >= 0; i-- {
+		temp := bigInt1.NumSlice[i] + bigInt2.NumSlice[i] + carry
+		resBigNum.NumSlice[i] = temp & (INT32_SIZE - 1)
 		carry = temp >> 32
 		//fmt.Println(carry)
 	}
@@ -118,16 +162,33 @@ func LongAdd(bigInt1, bigInt2 *BigInt) (uint64, BigInt) {
 	return carry, resBigNum
 }
 
-//func LongMul(num1, num2 *BigInt) *BigInt {
-//	resBigNum := BigInt{}
-//	for i := 63; i >= 0; i-- {
-//		temp, tempCarry := LongMulOneDigit(num1, num2.NumSlice[i])
-//
-//	}
-//}
+func LongShiftDigitsOneDigit(int4096 *BigInt4096, j int) {
+	for i := 0; i < 128-j; i++ {
+		int4096.NumSlice[i] = int4096.NumSlice[i+j]
 
-func LongSub(bigInt1, bigInt2 *BigInt) (int64, *BigInt) {
-	resBigNum := BigInt{}
+	}
+	for i := 128 - j; i < 128; i++ {
+		int4096.NumSlice[i] = 0
+	}
+}
+
+func LongMul(num1, num2 *BigInt2048) *BigInt4096 {
+	resBigNum := BigInt4096{}
+	//var carry uint64
+	for i := 63; i >= 0; i-- {
+
+		temp := LongMulOneDigit(num1, num2.NumSlice[i])
+
+		LongShiftDigitsOneDigit(temp, 63-i)
+
+		_, resBigNum = LongAdd4096(&resBigNum, temp)
+
+	}
+	return &resBigNum
+}
+
+func LongSub(bigInt1, bigInt2 *BigInt2048) (int64, *BigInt2048) {
+	resBigNum := BigInt2048{}
 	var borrow int64 = 0
 	for i := 63; i >= 0; i-- {
 		temp := int64(bigInt1.NumSlice[i]-bigInt2.NumSlice[i]) - borrow
@@ -135,7 +196,7 @@ func LongSub(bigInt1, bigInt2 *BigInt) (int64, *BigInt) {
 			resBigNum.NumSlice[i] = uint64(temp)
 			borrow = 0
 		} else {
-			resBigNum.NumSlice[i] = uint64(INT_SIZE + temp)
+			resBigNum.NumSlice[i] = uint64(INT32_SIZE + temp)
 			borrow = 1
 		}
 		//fmt.Println(bigInt1.NumSlice[i], "-", bigInt2.NumSlice[i], temp)
